@@ -503,9 +503,16 @@ button { cursor:pointer; }
  gap:8px;
 }
 
-.primary-btn:hover {
+.primary-btn:hover:not(:disabled) {
  transform:translateY(-1px);
  box-shadow:0 6px 16px rgba(2,132,199,.3);
+}
+
+.primary-btn:disabled {
+ background: #94a3b8 !important;
+ opacity: 0.6;
+ cursor: not-allowed;
+ box-shadow: none !important;
 }
 
 .primary-btn.btn-enviado {
@@ -1113,7 +1120,7 @@ LOGIN_HTML = STYLE + """
  </div>
  </div>
 
- <form id="adminBox" class="hidden" method="POST">
+ <form id="adminBox" class="hidden" method="POST" action="/login">
  {% if erro %}
  <div class="error">{{ erro }}</div>
  {% endif %}
@@ -1199,6 +1206,10 @@ def login():
 
   erro = "Usuário ou senha incorretos."
 
+ # Garante que ao entrar diretamente na tela de login a sessão anterior seja encerrada
+ if request.method == "GET":
+  session.clear()
+
  colaboradores = [
   (login, dados)
   for login, dados in USUARIOS.items()
@@ -1231,9 +1242,8 @@ def login_funcionario():
 
 @app.route("/")
 def index():
- if session.get("perfil") == "ADMIN":
-  return redirect(url_for("admin"))
- return redirect(url_for("upload_colaborador"))
+ # Força que a entrada pelo domínio/página inicial sempre direcione para o Login
+ return redirect(url_for("login"))
 
 # =========================================================
 # ADMIN
@@ -1360,7 +1370,6 @@ def admin():
  </div>
  {% endfor %}
 
- {# PERMITE O ENVIO DESDE QUE HAJA AO MENOS 1 ARCHIVO ENTREGUE #}
  {% if ok_p > 0 %}
  <div class="actions">
  <button class="action-btn action-main" onclick="abrirModalEmail('{{ p }}', {{ ok_p }}, {{ pendentes_p }})">✉ Enviar ao RH</button>
@@ -1520,7 +1529,7 @@ def enviar_email():
  return jsonify({"ok": ok, "msg": msg})
 
 # =========================================================
-# COLABORADOR (ACEITA JPEG E JPG)
+# COLABORADOR
 # =========================================================
 @app.route("/upload", methods=["GET", "POST"])
 def upload_colaborador():
@@ -1541,7 +1550,6 @@ def upload_colaborador():
    os.makedirs(pasta, exist_ok=True)
    ext = os.path.splitext(file.filename)[1].lower()
 
-   # PERMITE PDF, EXCEL, WORD, JPEG E JPG
    permitidos = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".jpg", ".jpeg"}
    if ext not in permitidos:
     erro = "Formato não permitido. Use PDF, Excel, Word, JPG ou JPEG."
@@ -1624,11 +1632,11 @@ def upload_colaborador():
  </label>
 
  {% if arq_atual %}
- <button class="primary-btn btn-enviado" style="margin-top:16px;" type="submit">
+ <button id="btnSubmit" class="primary-btn btn-enviado" style="margin-top:16px;" type="submit" disabled>
  ✓ Enviado com sucesso (Reenviar)
  </button>
  {% else %}
- <button class="primary-btn" style="margin-top:16px;" type="submit">
+ <button id="btnSubmit" class="primary-btn" style="margin-top:16px;" type="submit" disabled>
  Enviar folha de ponto
  </button>
  {% endif %}
@@ -1639,8 +1647,16 @@ def upload_colaborador():
 
  <script>
  function mostrarArquivo(input) {
- const nome=input.files[0]?.name || 'Selecionar arquivo de folha';
- document.getElementById('arquivoNome').textContent=nome;
+ const btn = document.getElementById('btnSubmit');
+ const nome = input.files[0]?.name;
+ 
+ if (nome) {
+  document.getElementById('arquivoNome').textContent = nome;
+  btn.disabled = false;
+ } else {
+  document.getElementById('arquivoNome').textContent = '{% if arq_atual %}Substituir arquivo enviado{% else %}Selecionar arquivo de folha{% endif %}';
+  btn.disabled = true;
+ }
  }
  </script>
  """,
